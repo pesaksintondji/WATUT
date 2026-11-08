@@ -1,0 +1,62 @@
+name: Build Fabric 1.21.11
+
+on:
+  push:
+    branches: [ '**' ]
+    paths-ignore: [ '**.md' ]
+  workflow_dispatch:
+    inputs:
+      coroutil_repo:
+        description: 'CoroUtil repository (owner/name) to build against'
+        default: ''
+      coroutil_ref:
+        description: 'CoroUtil branch or tag'
+        default: '1.21.11'
+
+jobs:
+  build-fabric:
+    runs-on: ubuntu-latest
+    env:
+      COROUTIL_REPO: ${{ inputs.coroutil_repo || format('{0}/CoroUtil', github.repository_owner) }}
+      COROUTIL_REF: ${{ inputs.coroutil_ref || '1.21.11' }}
+    steps:
+      - name: Checkout WATUT
+        uses: actions/checkout@v4
+
+      - name: Checkout CoroUtil
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.COROUTIL_REPO }}
+          ref: ${{ env.COROUTIL_REF }}
+          path: CoroUtil
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # WATUT resolves com.corosus.coroutil:coroutil-fabric from mavenLocal()
+      - name: Build CoroUtil (Fabric) and publish to mavenLocal
+        working-directory: CoroUtil
+        run: ./gradlew -b build_fabric.gradle publishToMavenLocal
+
+      - name: Build WATUT (Fabric)
+        run: ./gradlew -b build_fabric.gradle build
+
+      - name: Upload WATUT Fabric JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: watut-fabric-1.21.11
+          path: build/libs/watut-fabric-*.jar
+          if-no-files-found: error
+
+      - name: Upload CoroUtil Fabric JAR (required dependency)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coroutil-fabric-1.21.11
+          path: CoroUtil/build/libs/coroutil-fabric-*.jar
+          if-no-files-found: error
